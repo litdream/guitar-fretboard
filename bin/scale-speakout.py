@@ -24,6 +24,12 @@ sys.path.insert(0, str(lib_path))
 from diatonic import Diatonic, ENHARMONIC_MAP
 from fret import Fretboard
 
+# ANSI color codes for terminal output
+class Colors:
+    GREEN = '\033[92m'
+    RED = '\033[91m'
+    RESET = '\033[0m'
+
 # Standard guitar tuning (string number: open note index in chromatic scale)
 # String 1 (high e) = E = 4, String 2 (B) = B = 11, etc.
 GUITAR_TUNING = {
@@ -179,29 +185,75 @@ def check_answer(user_notes, correct_scale):
         return False
 
 
-def display_scale_on_fretboard(scale):
+def display_scale_on_fretboard(scale, user_notes=None):
     """Display the scale on a guitar fretboard with 3 notes per string in order.
 
-    The scale is displayed sequentially across strings, only moving up the fretboard:
-    - String 6: notes 0, 1, 2 of the scale (starting position)
-    - String 5: notes 3, 4, 5 of the scale (from min_fret onwards)
-    - String 4: notes 6, 0, 1 of the scale (from min_fret onwards)
-    - And so on, never going below the fret position established on string 6
+    The scale is displayed sequentially across strings, only moving up the fretboard.
+    If user_notes provided, mark user's notes first, then overwrite correct positions
+    with green (leaving wrong notes in red).
 
     Args:
         scale: Diatonic scale object with .scale attribute
+        user_notes: List of user-provided note names (lowercase), or None
 
     Returns:
-        String representation of the fretboard with scale notes marked
+        String representation of the fretboard with scale notes marked,
+        with colors if user_notes is provided
     """
     fretboard = Fretboard(18)
 
-    # Create a mapping of chromatic index to scale note
-    scale_note_map = {}
-    for note in scale.scale:
-        scale_note_map[ENHARMONIC_MAP[note]] = note
+    user_positions = []
+    correct_positions = []
 
-    # Start at the beginning of the scale
+    # If user notes provided, first mark user's answer on the fretboard
+    if user_notes is not None and len(user_notes) >= 7:
+        note_position = 0
+        min_fret = 0
+
+        # For each string (6 to 1), mark 3 consecutive notes from user's answer
+        for string_num in range(6, 0, -1):
+            open_note_index = GUITAR_TUNING[string_num]
+            notes_marked = 0
+            first_note_fret = None
+
+            # Search through frets starting from min_fret for the next 3 user notes
+            for fret_num in range(min_fret, 19):
+                # Calculate what note is at this fret
+                note_index = (open_note_index + fret_num) % 12
+
+                # Get the chromatic index of the current user note we're looking for
+                user_note = user_notes[note_position % 7]
+                # Handle both sharp and flat notation
+                user_note_normalized = user_note.capitalize()
+                if user_note_normalized not in ENHARMONIC_MAP:
+                    # Try adding # or b if it's a two-character note
+                    if len(user_note) > 1:
+                        user_note_normalized = user_note[0].upper() + user_note[1]
+
+                if user_note_normalized in ENHARMONIC_MAP:
+                    target_index = ENHARMONIC_MAP[user_note_normalized]
+
+                    # If this fret matches the current user note we're looking for
+                    if note_index == target_index:
+                        fretboard.mark(string_num, fret_num, 'x')
+                        user_positions.append((string_num, fret_num))
+                        notes_marked += 1
+
+                        # Track the first note's fret on this string
+                        if first_note_fret is None:
+                            first_note_fret = fret_num
+
+                        note_position += 1
+
+                        # Stop after marking 3 notes on this string
+                        if notes_marked >= 3:
+                            break
+
+            # Update min_fret to the position of the first note on this string
+            if first_note_fret is not None:
+                min_fret = first_note_fret
+
+    # Now mark the correct answer (may overwrite some user positions)
     scale_position = 0
     min_fret = 0  # Minimum fret position (updated as we progress)
 
@@ -223,6 +275,7 @@ def display_scale_on_fretboard(scale):
             # If this fret matches the current scale note we're looking for
             if note_index == target_index:
                 fretboard.mark(string_num, fret_num, 'x')
+                correct_positions.append((string_num, fret_num))
                 notes_marked += 1
 
                 # Track the first note's fret on this string
@@ -239,7 +292,75 @@ def display_scale_on_fretboard(scale):
         if first_note_fret is not None:
             min_fret = first_note_fret
 
-    return str(fretboard)
+    # Apply colors to the fretboard string output
+    fretboard_str = str(fretboard)
+
+    if user_notes is not None:
+        # Find positions that are only in user's answer (wrong notes)
+        wrong_positions = [pos for pos in user_positions if pos not in correct_positions]
+        # Color wrong notes red, correct notes green
+        fretboard_str = colorize_fretboard(fretboard_str, correct_positions, wrong_positions)
+
+    return fretboard_str
+
+
+def colorize_fretboard(fretboard_str, correct_positions, wrong_positions):
+    """Add ANSI color codes to fretboard string.
+
+    Args:
+        fretboard_str: String representation of fretboard
+        correct_positions: List of (string_num, fret_num) tuples for correct notes
+        wrong_positions: List of (string_num, fret_num) tuples for wrong notes
+
+    Returns:
+        Colored fretboard string
+    """
+    lines = list(fretboard_str.split('\n'))
+
+    # Create a list to store positions that need coloring for each line
+    # Format: {row: [(col, color), ...]}
+    color_map = {}
+
+    for string_num, fret_num in correct_positions:
+        row = (string_num - 1) * 2
+        if fret_num == 0:
+            col = 2
+        else:
+            col = 1 + (fret_num * 4)
+
+        if row not in color_map:
+            color_map[row] = []
+        color_map[row].append((col, Colors.GREEN))
+
+    for string_num, fret_num in wrong_positions:
+        row = (string_num - 1) * 2
+        if fret_num == 0:
+            col = 2
+        else:
+            col = 1 + (fret_num * 4)
+
+        if row not in color_map:
+            color_map[row] = []
+        color_map[row].append((col, Colors.RED))
+
+    # Apply colors to each line by rebuilding them character by character
+    for row, positions in color_map.items():
+        if row >= len(lines):
+            continue
+
+        line = lines[row]
+        # Sort positions in reverse order to apply colors from right to left
+        # This prevents index shifting issues
+        positions_sorted = sorted(positions, key=lambda x: x[0], reverse=True)
+
+        for col, color in positions_sorted:
+            if col < len(line):
+                char = line[col]
+                line = line[:col] + color + char + Colors.RESET + line[col+1:]
+
+        lines[row] = line
+
+    return '\n'.join(lines)
 
 
 def play_game():
@@ -311,7 +432,8 @@ def play_game():
         print()
 
         # Display the fretboard with scale notes after answer
-        fretboard_display = display_scale_on_fretboard(scale)
+        # Pass user_notes to show colors (green for correct, red for wrong)
+        fretboard_display = display_scale_on_fretboard(scale, user_notes)
         print(fretboard_display)
         print()
         print("-" * 60)
