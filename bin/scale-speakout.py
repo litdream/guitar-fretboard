@@ -185,7 +185,7 @@ def check_answer(user_notes, correct_scale):
         return False
 
 
-def display_scale_on_fretboard(scale, user_notes=None):
+def display_scale_on_fretboard(scale, user_notes=None, start_note_offset=0):
     """Display the scale on a guitar fretboard with 3 notes per string in order.
 
     The scale is displayed sequentially across strings, only moving up the fretboard.
@@ -195,6 +195,7 @@ def display_scale_on_fretboard(scale, user_notes=None):
     Args:
         scale: Diatonic scale object with .scale attribute
         user_notes: List of user-provided note names (lowercase), or None
+        start_note_offset: Index of the scale note to start the pattern from (0-6)
 
     Returns:
         String representation of the fretboard with scale notes marked,
@@ -211,7 +212,7 @@ def display_scale_on_fretboard(scale, user_notes=None):
 
     # If user notes provided, first mark user's answer on the fretboard
     if user_notes is not None and len(user_notes) >= 7:
-        note_position = 0
+        note_position = start_note_offset
         min_fret = 0
 
         # For each string (6 to 1), mark 3 consecutive notes from user's answer
@@ -260,7 +261,7 @@ def display_scale_on_fretboard(scale, user_notes=None):
                 min_fret = first_note_fret
 
     # Now mark the correct answer (may overwrite some user positions)
-    scale_position = 0
+    scale_position = start_note_offset
     min_fret = 0  # Minimum fret position (updated as we progress)
 
     # For each string (6 to 1), mark 3 consecutive notes from the scale
@@ -375,6 +376,18 @@ def colorize_fretboard(fretboard_str, correct_positions, wrong_positions):
     return '\n'.join(lines)
 
 
+def print_final_score(score, total):
+    """Display the final score and accuracy."""
+    print()
+    print("=" * 60)
+    print(f"Final Score: {score}/{total}")
+    if total > 0:
+        percentage = (score / total) * 100
+        print(f"Accuracy: {percentage:.1f}%")
+    print("Thanks for playing!")
+    print("=" * 60)
+
+
 def play_game():
     """Main game loop."""
     print("=" * 60)
@@ -417,14 +430,7 @@ def play_game():
 
         # Check for quit or exit
         if user_input.lower() in ['quit', 'exit']:
-            print()
-            print("=" * 60)
-            print(f"Final Score: {score}/{total}")
-            if total > 0:
-                percentage = (score / total) * 100
-                print(f"Accuracy: {percentage:.1f}%")
-            print("Thanks for playing!")
-            print("=" * 60)
+            print_final_score(score, total)
             break
 
         # Normalize and check the answer
@@ -443,10 +449,25 @@ def play_game():
         print(f"  Score: {score}/{total}")
         print()
 
-        # Display the fretboard with scale notes after answer
-        # Pass user_notes to show colors (green for correct, red for wrong)
-        fretboard_display = display_scale_on_fretboard(scale, user_notes)
-        print(fretboard_display)
+        # Loop for showing fretboard and handling left/right shifts
+        start_note_offset = 0
+        while True:
+            fretboard_display = display_scale_on_fretboard(scale, user_notes, start_note_offset)
+            print(fretboard_display)
+            print()
+            print("Type 'left' or 'right' to shift pattern, Enter to continue, or 'quit' to exit.")
+            command = input("> ").strip().lower()
+
+            if command == 'left':
+                start_note_offset = (start_note_offset - 1 + 7) % 7
+            elif command == 'right':
+                start_note_offset = (start_note_offset + 1) % 7
+            elif command in ['quit', 'exit']:
+                print_final_score(score, total)
+                return
+            else:
+                break
+
         print()
         print("-" * 60)
         print()
