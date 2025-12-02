@@ -373,7 +373,7 @@ def play_game():
     print("You can enter 7 notes or 8 notes (with octave).")
     print("Example: g a b c d e f# or g a b c d e f# g")
     print()
-    print("Type 'quit' to exit the game.")
+    print("Type 'quit' or 'exit' to exit the game.")
     print("=" * 60)
     print()
 
@@ -403,8 +403,8 @@ def play_game():
         # Get user input
         user_input = input("Your answer: ").strip()
 
-        # Check for quit
-        if user_input.lower() == 'quit':
+        # Check for quit or exit
+        if user_input.lower() in ['quit', 'exit']:
             print()
             print("=" * 60)
             print(f"Final Score: {score}/{total}")
