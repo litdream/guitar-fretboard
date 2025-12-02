@@ -54,6 +54,8 @@ def normalize_answer(answer):
 def check_answer(user_notes, correct_notes):
     """Check if the user's answer matches the correct notes.
 
+    Accepts enharmonic equivalents (e.g., Eb and D# are considered the same).
+
     Args:
         user_notes: List of user-provided note names (lowercase)
         correct_notes: List of correct note names (lowercase)
@@ -61,43 +63,87 @@ def check_answer(user_notes, correct_notes):
     Returns:
         True if answer is correct, False otherwise
     """
-    return user_notes == correct_notes
+    from diatonic import ENHARMONIC_MAP
+
+    # Must have same number of notes
+    if len(user_notes) != len(correct_notes):
+        return False
+
+    # Compare notes by their chromatic indices (enharmonic equivalents)
+    for user_note, correct_note in zip(user_notes, correct_notes):
+        # Normalize note names to capitalize first letter
+        user_normalized = user_note.capitalize()
+        if len(user_note) > 1 and user_note[1] in ['#', 'b']:
+            user_normalized = user_note[0].upper() + user_note[1]
+
+        correct_normalized = correct_note.capitalize()
+        if len(correct_note) > 1 and correct_note[1] in ['#', 'b']:
+            correct_normalized = correct_note[0].upper() + correct_note[1]
+
+        # Check if both notes are valid
+        if user_normalized not in ENHARMONIC_MAP:
+            return False
+        if correct_normalized not in ENHARMONIC_MAP:
+            return False
+
+        # Compare chromatic indices
+        if ENHARMONIC_MAP[user_normalized] != ENHARMONIC_MAP[correct_normalized]:
+            return False
+
+    return True
 
 
-def display_triad_on_fretboard(position, user_position=None):
+def display_triad_on_fretboard(position, triad, user_position=None):
     """Display the triad on a guitar fretboard.
 
     Args:
         position: List of (string_num, fret_num) tuples for correct positions
+        triad: Triad object to identify the root note
         user_position: List of (string_num, fret_num) tuples for user's answer, or None
 
     Returns:
         String representation of the fretboard with triad notes marked
     """
+    from diatonic import ENHARMONIC_MAP
+    from common_triad import GUITAR_TUNING
+
     fretboard = Fretboard(12)
+
+    # Get the root note index for marking with 'R'
+    root_index = ENHARMONIC_MAP[triad.root]
 
     # Mark all positions (both user's and correct)
     all_positions = set()
 
     if user_position is not None:
         for string_num, fret_num in user_position:
-            fretboard.mark(string_num, fret_num, 'x')
+            # Calculate the note at this position
+            open_note = GUITAR_TUNING[string_num]
+            note_at_fret = (open_note + fret_num) % 12
+            # Mark with 'R' if it's the root note, otherwise 'x'
+            marker = 'R' if note_at_fret == root_index else 'x'
+            fretboard.mark(string_num, fret_num, marker)
             all_positions.add((string_num, fret_num))
 
     for string_num, fret_num in position:
-        fretboard.mark(string_num, fret_num, 'x')
+        # Calculate the note at this position
+        open_note = GUITAR_TUNING[string_num]
+        note_at_fret = (open_note + fret_num) % 12
+        # Mark with 'R' if it's the root note, otherwise 'x'
+        marker = 'R' if note_at_fret == root_index else 'x'
+        fretboard.mark(string_num, fret_num, marker)
         all_positions.add((string_num, fret_num))
 
     fretboard_str = str(fretboard)
 
-    # Add colors if user position was provided
+    # Always apply colors
     if user_position is not None:
         # Find wrong positions (in user_position but not in position)
         wrong_positions = [pos for pos in user_position if pos not in position]
         fretboard_str = colorize_fretboard(fretboard_str, position, wrong_positions)
     else:
-        # No user position - just show correct positions without colors
-        pass
+        # No user position - show correct positions in green
+        fretboard_str = colorize_fretboard(fretboard_str, position, [])
 
     return fretboard_str
 
@@ -239,7 +285,7 @@ def play_game():
     print()
     print("Identify the notes of the triad in the specified inversion.")
     print("Enter the notes from lowest to highest string (4, 3, 2).")
-    print("Example: 'c e g' or 'c e a'")
+    print("Example: 'bb d f' or 'c e a'")
     print()
     print("Type 'quit' or 'exit' to exit the game.")
     print("=" * 60)
@@ -304,7 +350,7 @@ def play_game():
         if position:
             # Parse user position to show their wrong notes in red
             user_position = parse_user_position(user_notes, inversion, triad) if not correct else None
-            fretboard_display = display_triad_on_fretboard(position, user_position)
+            fretboard_display = display_triad_on_fretboard(position, triad, user_position)
             print(fretboard_display)
         else:
             print("(No position found on fretboard for this triad)")

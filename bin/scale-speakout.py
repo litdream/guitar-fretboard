@@ -205,6 +205,10 @@ def display_scale_on_fretboard(scale, user_notes=None):
     user_positions = []
     correct_positions = []
 
+    # Get the root note index for marking with 'R'
+    root_note = scale.scale[0]
+    root_index = ENHARMONIC_MAP[root_note]
+
     # If user notes provided, first mark user's answer on the fretboard
     if user_notes is not None and len(user_notes) >= 7:
         note_position = 0
@@ -235,7 +239,9 @@ def display_scale_on_fretboard(scale, user_notes=None):
 
                     # If this fret matches the current user note we're looking for
                     if note_index == target_index:
-                        fretboard.mark(string_num, fret_num, 'x')
+                        # Mark with 'R' if it's the root note, otherwise 'x'
+                        marker = 'R' if note_index == root_index else 'x'
+                        fretboard.mark(string_num, fret_num, marker)
                         user_positions.append((string_num, fret_num))
                         notes_marked += 1
 
@@ -274,7 +280,9 @@ def display_scale_on_fretboard(scale, user_notes=None):
 
             # If this fret matches the current scale note we're looking for
             if note_index == target_index:
-                fretboard.mark(string_num, fret_num, 'x')
+                # Mark with 'R' if it's the root note, otherwise 'x'
+                marker = 'R' if note_index == root_index else 'x'
+                fretboard.mark(string_num, fret_num, marker)
                 correct_positions.append((string_num, fret_num))
                 notes_marked += 1
 
@@ -295,11 +303,15 @@ def display_scale_on_fretboard(scale, user_notes=None):
     # Apply colors to the fretboard string output
     fretboard_str = str(fretboard)
 
+    # Always apply colors
     if user_notes is not None:
         # Find positions that are only in user's answer (wrong notes)
         wrong_positions = [pos for pos in user_positions if pos not in correct_positions]
         # Color wrong notes red, correct notes green
         fretboard_str = colorize_fretboard(fretboard_str, correct_positions, wrong_positions)
+    else:
+        # No user notes - show correct positions in green
+        fretboard_str = colorize_fretboard(fretboard_str, correct_positions, [])
 
     return fretboard_str
 
